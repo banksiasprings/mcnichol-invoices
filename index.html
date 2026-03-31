@@ -1415,7 +1415,7 @@ function deleteSite(i){const ss=sites();ss.splice(i,1);DB.set('sites',ss);render
 function closeSiteModal(){document.getElementById('site-modal').classList.remove('open')}
 
 // --- Map Picker ---
-let leafletMap=null,leafletMarker=null,leafletCircle=null;
+let leafletMap=null,leafletMarker=null,leafletCircle=null,leafletCenterDot=null;
 let mapSelectedLat=null,mapSelectedLng=null,mapSelectedRadius=100;
 let findMeMarker=null;
 function findMyLocation(){
@@ -1441,7 +1441,7 @@ function openMapModal(){
 }
 
 function initMapPicker(){
-  if(leafletMap){leafletMap.remove();leafletMap=null;leafletMarker=null;leafletCircle=null;}
+  if(leafletMap){leafletMap.remove();leafletMap=null;leafletMarker=null;leafletCircle=null;leafletCenterDot=null;}
   const centerLat=lastLat||-28.0;
   const centerLng=lastLng||153.4;
   const zoom=lastLat?16:5;
@@ -1467,11 +1467,15 @@ function initMapPicker(){
     mapSelectedLat=e.latlng.lat;mapSelectedLng=e.latlng.lng;
     if(leafletMarker) leafletMarker.remove();
     if(leafletCircle) leafletCircle.remove();
+    if(leafletCenterDot) leafletCenterDot.remove();
     leafletMarker=L.marker([mapSelectedLat,mapSelectedLng],{
       icon:L.divIcon({className:'',html:'<div style="width:14px;height:14px;background:#2D6A4F;border:2px solid #fff;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>',iconSize:[14,14],iconAnchor:[7,7]})
     }).addTo(leafletMap);
     leafletCircle=L.circle([mapSelectedLat,mapSelectedLng],{
-      radius:mapSelectedRadius,color:'#2D6A4F',fillColor:'#2D6A4F',fillOpacity:0.15,weight:2
+      radius:mapSelectedRadius,color:'#3b82f6',fillColor:'#3b82f6',fillOpacity:0.15,opacity:0.5,weight:2
+    }).addTo(leafletMap);
+    leafletCenterDot=L.circleMarker([mapSelectedLat,mapSelectedLng],{
+      radius:5,color:'#3b82f6',fillColor:'#3b82f6',fillOpacity:1,weight:2
     }).addTo(leafletMap);
     document.getElementById('map-coords-display').textContent=mapSelectedLat.toFixed(6)+', '+mapSelectedLng.toFixed(6);
     document.getElementById('confirm-map-btn').disabled=false;
@@ -1495,7 +1499,7 @@ function confirmMapLocation(){
 
 function closeMapModal(){
   document.getElementById('map-modal').classList.remove('open');
-  if(leafletMap){leafletMap.remove();leafletMap=null;leafletMarker=null;leafletCircle=null;}
+  if(leafletMap){leafletMap.remove();leafletMap=null;leafletMarker=null;leafletCircle=null;leafletCenterDot=null;}
 }
 
 // --- GST pref ---
