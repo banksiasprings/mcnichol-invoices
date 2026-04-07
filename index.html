@@ -162,12 +162,164 @@
   .inv-subtotal-row.total{font-weight:700;font-size:15px;padding-top:6px;border-top:2px solid var(--text);margin-top:4px}
   .inv-subtotal-row.subdued{color:var(--text2)}
 </style>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword,
+         createUserWithEmailAndPassword, signOut }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+         doc, setDoc, getDoc, serverTimestamp }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDuwEH9Vp__h1POczgW3Sw_Oc0tpVVfk1s",
+  authDomain: "mcnichol-invoices.firebaseapp.com",
+  projectId: "mcnichol-invoices",
+  storageBucket: "mcnichol-invoices.firebasestorage.app",
+  messagingSenderId: "869367788629",
+  appId: "1:869367788629:web:36492a88964408727ed0dc"
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const auth = getAuth(fbApp);
+const firestoreDb = initializeFirestore(fbApp, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+});
+
+// Keys to sync (without the mcn_ prefix used by DB)
+const SYNC_KEYS = ['settings', 'clients', 'days', 'sites', 'activeDay', 'invoices', 'gst_on'];
+
+const CloudSync = {
+  uid: null,
+
+  async syncKey(key, rawValue) {
+    if (!this.uid) return;
+    try {
+      const ref = doc(firestoreDb, 'users', this.uid, 'data', key);
+      await setDoc(ref, { value: rawValue, updatedAt: serverTimestamp() }, { merge: true });
+    } catch(e) { console.warn('CloudSync.syncKey failed:', key, e); }
+  },
+
+  async restore() {
+    if (!this.uid) return;
+    try {
+      for (const key of SYNC_KEYS) {
+        const ref = doc(firestoreDb, 'users', this.uid, 'data', key);
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          const raw = snap.data().value;
+          if (raw !== undefined && raw !== null) {
+            // DB stores as JSON string under mcn_ prefix
+            const stored = typeof raw === 'string' ? raw : JSON.stringify(raw);
+            localStorage.setItem('mcn_' + key, stored);
+          }
+        }
+      }
+    } catch(e) { console.warn('CloudSync.restore failed:', e); }
+  },
+
+  async pushAll() {
+    if (!this.uid) return;
+    for (const key of SYNC_KEYS) {
+      const raw = localStorage.getItem('mcn_' + key);
+      if (raw !== null) await this.syncKey(key, raw);
+    }
+  }
+};
+
+// Patch DB.set once DOM + inline scripts are ready
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.DB && window.DB.set) {
+    const _orig = window.DB.set.bind(window.DB);
+    window.DB.set = function(key, value) {
+      _orig(key, value);
+      if (SYNC_KEYS.includes(key)) {
+        const raw = localStorage.getItem('mcn_' + key);
+        if (raw !== null) CloudSync.syncKey(key, raw);
+      }
+    };
+  }
+});
+
+// Auth state handler
+onAuthStateChanged(auth, async (user) => {
+  const loginScreen = document.getElementById('screen-login');
+  const appWrapper  = document.getElementById('main-app-wrapper');
+  const accountEl   = document.getElementById('cloud-account-display');
+
+  if (user) {
+    CloudSync.uid = user.uid;
+    if (accountEl) accountEl.textContent = user.email;
+    await CloudSync.restore();
+    if (loginScreen) loginScreen.style.display = 'none';
+    if (appWrapper)  appWrapper.style.display  = 'block';
+    if (window.initApp) window.initApp();
+  } else {
+    CloudSync.uid = null;
+    if (loginScreen) loginScreen.style.display = 'flex';
+    if (appWrapper)  appWrapper.style.display  = 'none';
+  }
+});
+
+// Exposed handlers called by login screen buttons
+window.firebaseLogin = async function() {
+  const email    = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl    = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+  } catch(e) {
+    errEl.textContent    = e.message.replace('Firebase: ', '').replace(/ \(auth\/.*\)\.?$/, '');
+    errEl.style.display  = 'block';
+  }
+};
+
+window.firebaseRegister = async function() {
+  const email    = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl    = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  if (password.length < 6) {
+    errEl.textContent   = 'Password must be at least 6 characters.';
+    errEl.style.display = 'block';
+    return;
+  }
+  try {
+    await createUserWithEmailAndPassword(auth, email, password);
+  } catch(e) {
+    errEl.textContent    = e.message.replace('Firebase: ', '').replace(/ \(auth\/.*\)\.?$/, '');
+    errEl.style.display  = 'block';
+  }
+};
+
+window.firebaseSignOut = async function() {
+  await signOut(auth);
+};
+</script>
 </head>
 <body>
 
 <div class="offline-banner" id="offline-banner">You're offline — app running from local storage</div>
 <div id="toast" class="toast"></div>
 
+<!-- LOGIN SCREEN -->
+<div id="screen-login" style="position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px">
+  <div style="font-size:60px;margin-bottom:12px">📄</div>
+  <h1 style="font-size:26px;font-weight:700;margin-bottom:6px;color:var(--text)">Invoice &amp; PDF</h1>
+  <p style="font-size:14px;color:var(--text2);margin-bottom:32px;text-align:center;max-width:320px">Sign in to keep your data safe and synced across devices</p>
+  <div style="width:100%;max-width:360px">
+    <div class="field"><label>Email</label><input type="email" id="login-email" placeholder="you@example.com" autocomplete="email"></div>
+    <div class="field"><label>Password</label><input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')firebaseLogin()"></div>
+    <div id="login-error" style="display:none;color:var(--red);font-size:13px;margin-bottom:12px;padding:10px;background:var(--red-light);border-radius:var(--radius-sm)"></div>
+    <button class="btn btn-primary" style="width:100%;margin-bottom:10px" onclick="firebaseLogin()">Sign In</button>
+    <button class="btn btn-secondary" style="width:100%" onclick="firebaseRegister()">Create Account</button>
+  </div>
+</div>
+
+<!-- MAIN APP (hidden until authenticated) -->
+<div id="main-app-wrapper" style="display:none">
 <!-- CHECKIN SCREEN -->
 <div id="screen-checkin" class="screen active">
   <div class="header">
@@ -436,6 +588,11 @@
         <button class="btn btn-secondary" onclick="loadApkRelease()" style="width:100%">Check for latest APK…</button>
       </div>
     </div>
+    <div class="card" style="margin-top:12px">
+      <div class="card-title">☁️ Cloud Account</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Signed in as <span id="cloud-account-display" style="font-weight:600;color:var(--text)">…</span></div>
+      <button class="btn btn-secondary" onclick="firebaseSignOut()" style="width:100%">Sign Out</button>
+    </div>
   </div>
 </div>
 
@@ -578,6 +735,7 @@ document.addEventListener('DOMContentLoaded', () => {
   </div>
 </div>
 
+</div><!-- end main-app-wrapper -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const DB={
@@ -1697,26 +1855,27 @@ if('serviceWorker' in navigator){
   });
 }
 
-// --- Init ---
-if(!DB.get('settings')){
-  DB.set('settings',DEFAULTS);
-  DB.set('clients',[{company:DEFAULTS.client,contact:'',abn:'',address:'',email:'',phone:'',isDefault:true}]);
-} else {
-  const s=DB.get('settings');
-  if(s.sonrate===undefined){s.sonrate=30;DB.set('settings',s);}
-  if(!s.machineRates){s.machineRates=defaultMachineRates();DB.set('settings',s);}
-  // Migrate: seed clients from legacy single client string
-  if(!DB.get('clients')){
-    const ec=s.client||DEFAULTS.client;
-    DB.set('clients',[{company:ec,contact:'',abn:'',address:'',email:'',phone:'',isDefault:true}]);
+// --- Init (called by Firebase auth after sign-in + cloud restore) ---
+window.initApp = function() {
+  if(!DB.get('settings')){
+    DB.set('settings',DEFAULTS);
+    DB.set('clients',[{company:DEFAULTS.client,contact:'',abn:'',address:'',email:'',phone:'',isDefault:true}]);
+  } else {
+    const s=DB.get('settings');
+    if(s.sonrate===undefined){s.sonrate=30;DB.set('settings',s);}
+    if(!s.machineRates){s.machineRates=defaultMachineRates();DB.set('settings',s);}
+    if(!DB.get('clients')){
+      const ec=s.client||DEFAULTS.client;
+      DB.set('clients',[{company:ec,contact:'',abn:'',address:'',email:'',phone:'',isDefault:true}]);
+    }
   }
-}
-// Restore GST toggle state
-const gstEl=document.getElementById('toggle-gst');
-if(gstEl) gstEl.checked=!!DB.get('gst_on');
-// Populate client dropdown
-populateClientDropdown();
-initCheckinScreen();
+  // Restore GST toggle state
+  const gstEl=document.getElementById('toggle-gst');
+  if(gstEl) gstEl.checked=!!DB.get('gst_on');
+  // Populate client dropdown
+  populateClientDropdown();
+  initCheckinScreen();
+};
 </script>
 </body>
 </html>
