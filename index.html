@@ -169,7 +169,7 @@ import { getAuth, onAuthStateChanged, signInWithEmailAndPassword,
          createUserWithEmailAndPassword, signOut }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-         doc, setDoc, getDoc, serverTimestamp }
+         doc, setDoc, getDoc, getDocs, deleteDoc, collection, serverTimestamp }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -242,28 +242,29 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// Only this email may access the app
-const ALLOWED_EMAIL = 'smcnichol@outlook.com';
+const ADMIN_EMAIL = 'smcnichol@outlook.com';
+
+// Write/update a user record in the admin registry
+async function registerUserInAdmin(user) {
+  try {
+    const ref = doc(firestoreDb, 'admin', 'users', 'accounts', user.uid);
+    await setDoc(ref, { email: user.email, uid: user.uid, lastSeen: serverTimestamp() }, { merge: true });
+  } catch(e) { console.warn('Admin registry write failed:', e); }
+}
 
 // Auth state handler
 onAuthStateChanged(auth, async (user) => {
   const loginScreen = document.getElementById('screen-login');
   const appWrapper  = document.getElementById('main-app-wrapper');
   const accountEl   = document.getElementById('cloud-account-display');
-  const errEl       = document.getElementById('login-error');
+  const adminTab    = document.getElementById('nav-admin');
 
   if (user) {
-    // Reject any account that isn't the authorised one
-    if (user.email.toLowerCase() !== ALLOWED_EMAIL.toLowerCase()) {
-      await signOut(auth);
-      if (errEl) {
-        errEl.textContent   = 'Access restricted to authorised user only.';
-        errEl.style.display = 'block';
-      }
-      return;
-    }
     CloudSync.uid = user.uid;
     if (accountEl) accountEl.textContent = user.email;
+    // Show admin tab only for admin
+    if (adminTab) adminTab.style.display = user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase() ? 'flex' : 'none';
+    await registerUserInAdmin(user);
     await CloudSync.restore();
     if (loginScreen) loginScreen.style.display = 'none';
     if (appWrapper)  appWrapper.style.display  = 'block';
@@ -274,6 +275,52 @@ onAuthStateChanged(auth, async (user) => {
     if (appWrapper)  appWrapper.style.display  = 'none';
   }
 });
+
+// Admin: load user list
+window.loadAdminUsers = async function() {
+  const list = document.getElementById('admin-user-list');
+  if (!list) return;
+  list.innerHTML = '<div style="color:var(--text2);font-size:13px">Loading…</div>';
+  try {
+    const snap = await getDocs(collection(firestoreDb, 'admin', 'users', 'accounts'));
+    if (snap.empty) { list.innerHTML = '<div style="color:var(--text2);font-size:13px">No registered users.</div>'; return; }
+    list.innerHTML = '';
+    snap.forEach(d => {
+      const u = d.data();
+      const isMe = u.email && u.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+      const seen = u.lastSeen ? new Date(u.lastSeen.seconds*1000).toLocaleDateString('en-AU') : '—';
+      list.innerHTML += `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:var(--text)">${u.email}${isMe?' <span style="font-size:11px;color:var(--green)">(admin)</span>':''}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">Last seen: ${seen}</div>
+          </div>
+          ${isMe ? '' : `<button class="btn btn-secondary" style="font-size:12px;padding:6px 12px;color:var(--red);border-color:var(--red)" onclick="deleteUserData('${u.uid}','${u.email}')">Delete</button>`}
+        </div>`;
+    });
+  } catch(e) {
+    list.innerHTML = '<div style="color:var(--red);font-size:13px">Could not load users. Check connection.</div>';
+    console.warn('loadAdminUsers failed:', e);
+  }
+};
+
+// Admin: delete a user's data from Firestore
+window.deleteUserData = async function(uid, email) {
+  if (!confirm(`Delete all data for ${email}?\n\nThis removes their Firestore data. To fully remove their login, use the Firebase Console.`)) return;
+  try {
+    // Delete their sync keys
+    const SYNC_KEYS = ['settings','clients','days','sites','activeDay','invoices','gst_on'];
+    for (const key of SYNC_KEYS) {
+      await deleteDoc(doc(firestoreDb, 'users', uid, 'data', key));
+    }
+    // Remove from admin registry
+    await deleteDoc(doc(firestoreDb, 'admin', 'users', 'accounts', uid));
+    window.loadAdminUsers();
+    alert(`Data deleted for ${email}.`);
+  } catch(e) {
+    alert('Delete failed: ' + e.message);
+  }
+};
 
 // Exposed handlers called by login screen buttons
 window.firebaseLogin = async function() {
@@ -302,8 +349,17 @@ window.firebaseRegister = async function() {
   try {
     await createUserWithEmailAndPassword(auth, email, password);
   } catch(e) {
-    errEl.textContent    = e.message.replace('Firebase: ', '').replace(/ \(auth\/.*\)\.?$/, '');
-    errEl.style.display  = 'block';
+    const code = e.code || '';
+    if (code === 'auth/email-already-in-use') {
+      errEl.textContent = 'An account with that email already exists. Please sign in instead.';
+    } else if (code === 'auth/invalid-email') {
+      errEl.textContent = 'Please enter a valid email address.';
+    } else if (code === 'auth/weak-password') {
+      errEl.textContent = 'Password must be at least 6 characters.';
+    } else {
+      errEl.textContent = e.message.replace('Firebase: ', '').replace(/ \(auth\/.*\)\.?$/, '');
+    }
+    errEl.style.display = 'block';
   }
 };
 
@@ -326,7 +382,8 @@ window.firebaseSignOut = async function() {
     <div class="field"><label>Email</label><input type="email" id="login-email" placeholder="you@example.com" autocomplete="email"></div>
     <div class="field"><label>Password</label><input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')firebaseLogin()"></div>
     <div id="login-error" style="display:none;color:var(--red);font-size:13px;margin-bottom:12px;padding:10px;background:var(--red-light);border-radius:var(--radius-sm)"></div>
-    <button class="btn btn-primary" style="width:100%" onclick="firebaseLogin()">Sign In</button>
+    <button class="btn btn-primary" style="width:100%;margin-bottom:10px" onclick="firebaseLogin()">Sign In</button>
+    <button class="btn btn-secondary" style="width:100%" onclick="firebaseRegister()">Create Account</button>
   </div>
 </div>
 
@@ -618,6 +675,22 @@ document.getElementById('app-version').textContent = APP_VERSION;
   </div>
 </div>
 
+<!-- ADMIN SCREEN (admin only) -->
+<div id="screen-admin" class="screen">
+  <div class="header"><h1>Admin</h1><p>Manage user accounts</p></div>
+  <div class="section">
+    <div class="card">
+      <div class="card-title">👥 Registered Users</div>
+      <div id="admin-user-list"><div style="color:var(--text2);font-size:13px">Tap refresh to load.</div></div>
+      <button class="btn btn-secondary" style="margin-top:14px;width:100%" onclick="loadAdminUsers()">↻ Refresh</button>
+    </div>
+    <div class="card" style="margin-top:12px;background:var(--amber-light);border-color:var(--amber)">
+      <div class="card-title" style="color:var(--amber)">⚠️ Deleting accounts</div>
+      <div style="font-size:13px;color:var(--text2)">The Delete button removes all of a user's Firestore data. To fully remove their login credentials, go to <strong>Firebase Console → Authentication → Users</strong> and delete from there.</div>
+    </div>
+  </div>
+</div>
+
 <!-- BOTTOM NAV -->
 <nav class="nav">
   <button class="nav-btn active" onclick="showScreen('checkin',this)"><span class="nav-icon">⏱</span>Today</button>
@@ -626,6 +699,7 @@ document.getElementById('app-version').textContent = APP_VERSION;
   <button class="nav-btn" onclick="showScreen('analytics',this)"><span class="nav-icon">📊</span>Stats</button>
   <button class="nav-btn" onclick="showScreen('settings',this)"><span class="nav-icon">⚙️</span>Settings</button>
   <button class="nav-btn" onclick="showScreen('saved',this)"><span class="nav-icon">🗂</span>Saved</button>
+  <button class="nav-btn" id="nav-admin" style="display:none" onclick="showScreen('admin',this);loadAdminUsers()"><span class="nav-icon">🔑</span>Admin</button>
 </nav>
 
 <!-- ADD SITE MODAL -->
