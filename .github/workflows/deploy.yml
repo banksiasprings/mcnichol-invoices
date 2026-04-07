@@ -1,0 +1,33 @@
+name: Deploy to GitHub Pages
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: Auto-bump service worker cache version
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          sed -i "s/const CACHE = 'invoice-pdf-v[^']*'/const CACHE = 'invoice-pdf-${SHORT_SHA}'/" sw.js
+          echo "Cache set to invoice-pdf-${SHORT_SHA}"
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      - id: deployment
+        uses: actions/deploy-pages@v4
