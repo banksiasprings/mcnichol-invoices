@@ -1,0 +1,28 @@
+{
+  "name": "mcnichol-invoices",
+  "version": "1.0.0",
+  "description": "A Progressive Web App (PWA) for tradespeople to manage timesheets, track work hours, and generate professional PDF invoices.",
+  "main": "sw.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/banksiasprings/mcnichol-invoices.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/banksiasprings/mcnichol-invoices/issues"
+  },
+  "homepage": "https://github.com/banksiasprings/mcnichol-invoices#readme",
+  "dependencies": {
+    "@capacitor-community/background-geolocation": "^1.2.26",
+    "@capacitor/android": "^8.3.0",
+    "@capacitor/cli": "^8.3.0",
+    "@capacitor/core": "^8.3.0",
+    "@capacitor/local-notifications": "^8.0.2"
+  }
+}

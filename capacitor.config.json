@@ -1,0 +1,20 @@
+{
+  "appId": "com.banksiasprings.invoices",
+  "appName": "Invoice & PDF",
+  "webDir": "www",
+  "android": {
+    "buildOptions": {
+      "keystorePath": null,
+      "keystoreAlias": null
+    }
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_icon",
+      "iconColor": "#3B4A2F"
+    },
+    "BackgroundGeolocation": {
+      "locationAuthorizationRequest": "Always"
+    }
+  }
+}

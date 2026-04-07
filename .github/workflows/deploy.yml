@@ -24,10 +24,10 @@ jobs:
       - name: Auto-bump service worker cache version
         run: |
           SHORT_SHA=$(git rev-parse --short HEAD)
-          sed -i "s/const CACHE = 'invoice-pdf-[^']*'/const CACHE = 'invoice-pdf-${SHORT_SHA}'/" sw.js
+          sed -i "s/const CACHE = 'invoice-pdf-[^']*'/const CACHE = 'invoice-pdf-${SHORT_SHA}'/" www/sw.js
           echo "Cache set to invoice-pdf-${SHORT_SHA}"
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: '.'
+          path: 'www'
       - id: deployment
         uses: actions/deploy-pages@v4
