@@ -21,12 +21,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
-      - name: Auto-bump service worker cache version and app version
+      - name: Auto-bump service worker cache version
         run: |
           SHORT_SHA=$(git rev-parse --short HEAD)
           sed -i "s/const CACHE = 'invoice-pdf-[^']*'/const CACHE = 'invoice-pdf-${SHORT_SHA}'/" sw.js
-          sed -i "s/const APP_VERSION = '[^']*'/const APP_VERSION = '${SHORT_SHA}'/" index.html
-          echo "Cache and version set to ${SHORT_SHA}"
+          echo "Cache set to invoice-pdf-${SHORT_SHA}"
       - uses: actions/upload-pages-artifact@v4
         with:
           path: '.'
