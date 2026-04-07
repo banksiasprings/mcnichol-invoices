@@ -1078,12 +1078,18 @@ function tickTimer(){
 function toggleLunch(){
   const ad=activeDay();if(!ad)return;
   if(!ad.lunchStart){
+    // Pause timer during lunch so display freezes cleanly
+    clearInterval(timerInterval);timerInterval=null;
     ad.lunchStart=nowTime();DB.set('activeDay',ad);
-    document.getElementById('lunch-btn').textContent='End Lunch';toast('Lunch started');
+    document.getElementById('lunch-btn').textContent='End Lunch';
+    document.getElementById('timer-status').textContent='On lunch break…';
+    toast('Lunch started');
   } else {
     const[sh,sm]=ad.lunchStart.split(':').map(Number),now=new Date(),mins=now.getHours()*60+now.getMinutes()-sh*60-sm;
     ad.lunchMins=(ad.lunchMins||0)+Math.max(0,mins);ad.lunchStart=null;DB.set('activeDay',ad);
     document.getElementById('lunch-btn').textContent='Log Lunch';updateLunchDisplay(ad);
+    // Restart timer — tick immediately so display snaps to correct deducted time
+    clearInterval(timerInterval);timerInterval=setInterval(tickTimer,1000);tickTimer();
     toast('Lunch logged: '+Math.round(mins)+' min');
   }
 }
