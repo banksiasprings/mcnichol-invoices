@@ -1371,6 +1371,7 @@ function startDay(){
   if(!site){toast('Please select a site');return;}
   const s=S();
   const ad={
+    id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),
     site,start,date:todayStr(),
     rate:s.rate,sonrate:s.sonrate||30,
     sonWorking,sonHours:sonHoursVal?parseFloat(sonHoursVal):null,
@@ -1523,7 +1524,8 @@ function saveEdit(){
 
 function saveDay(){
   const ad=activeDay();if(!ad)return;
-  const dl=days(),filtered=dl.filter(d=>d.date!==ad.date);
+  // Filter by unique id so a second entry on the same day doesn't wipe the first
+  const dl=days(),filtered=ad.id?dl.filter(d=>d.id!==ad.id):dl;
   filtered.push({...ad,invoiced:false});
   DB.set('days',filtered);DB.set('activeDay',null);clearInterval(timerInterval);
   if(window.CloudSync) window.CloudSync.pushAll().then(()=>toast('☁ Synced to cloud ✓')).catch(()=>{});
@@ -1571,10 +1573,11 @@ window.saveLunchManually = function(){
 };
 
 // --- Log entry edit ---
-let _logEditDate=null;
-window.editLogDay = function(date){
-  const dl=days(),d=dl.find(x=>x.date===date);if(!d)return;
-  _logEditDate=date;
+let _logEditDate=null; // stores entry id (or date for legacy entries)
+window.editLogDay = function(entryKey){
+  // entryKey is preferably the unique id, falls back to date for old entries
+  const dl=days(),d=dl.find(x=>(x.id&&x.id===entryKey)||(!x.id&&x.date===entryKey));if(!d)return;
+  _logEditDate=d.id||d.date;
   document.getElementById('le-date').value=date;
   document.getElementById('log-edit-date-label').textContent='— '+fmtDate(date);
   document.getElementById('le-start').value=d.start||'';
@@ -1591,7 +1594,7 @@ window.closeLogEditModal = function(){
 };
 window.saveLogEdit = function(){
   if(!_logEditDate)return;
-  const dl=days(),idx=dl.findIndex(x=>x.date===_logEditDate);
+  const dl=days(),idx=dl.findIndex(x=>(x.id&&x.id===_logEditDate)||(!x.id&&x.date===_logEditDate));
   if(idx===-1){toast('Day not found');return;}
   const d=dl[idx];
   d.start=document.getElementById('le-start').value||d.start;
@@ -1646,7 +1649,7 @@ window.closeDeleteConfirm = function(){
 };
 window.confirmDeleteLogEntry = function(){
   if(!_logEditDate)return;
-  const dl=days(),idx=dl.findIndex(x=>x.date===_logEditDate);
+  const dl=days(),idx=dl.findIndex(x=>(x.id&&x.id===_logEditDate)||(!x.id&&x.date===_logEditDate));
   if(idx===-1){toast('Day not found');return;}
   const filtered=dl.filter((d,i)=>i!==idx);
   DB.set('days',filtered);
@@ -1700,7 +1703,7 @@ function renderLog(){
       </div>
       <div class="day-item-right" style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
         <div><div class="amount">${fmtMoney(total)}</div><div class="hours">${formatHours(h)}</div></div>
-        <button onclick="editLogDay('${d.date}')" style="background:none;border:1.5px solid var(--border);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;color:var(--text2);cursor:pointer;white-space:nowrap">✏️ Edit</button>
+        <button onclick="editLogDay('${d.id||d.date}')" style="background:none;border:1.5px solid var(--border);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;color:var(--text2);cursor:pointer;white-space:nowrap">✏️ Edit</button>
       </div>
     </div>`;
     el.appendChild(c);
@@ -2479,18 +2482,16 @@ function saveManualEntry(){
   if(start >= finish){ toast('Finish time must be after start time'); return; }
   const s = S();
   const existing = days();
-  const clash = existing.find(d => d.date === date);
-  if(clash && !confirm(`You already have an entry for ${fmtDate(date)}.\nReplace it with this manual entry?`)) return;
   const entry = {
+    id: Date.now().toString(36)+Math.random().toString(36).slice(2,7),
     date, site, start, finish, lunchMins,
     rate: s.rate, sonWorking, sonHours,
     sonrate: s.sonrate||30, machines: [],
     invoiced: false, manual: true,
     notes: notes||undefined
   };
-  const filtered = existing.filter(d => d.date !== date);
-  filtered.push(entry);
-  DB.set('days', filtered);
+  existing.push(entry);
+  DB.set('days', existing);
   toast('Manual entry saved! ✓');
   if(window.CloudSync) window.CloudSync.pushAll().then(()=>toast('☁ Synced to cloud ✓')).catch(()=>{});
   // Reset for next entry — keep site/date in case they're logging multiple days
