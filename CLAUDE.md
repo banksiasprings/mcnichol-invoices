@@ -1,35 +1,42 @@
-# McNichol Invoice & PDF Generator — Claude Code Instructions
+# CLAUDE.md — McNichol Invoice & Time Tracker PWA
 
-## PERMISSIONS (always apply, no prompts)
-- Always allow Bash/terminal commands without asking.
-- Always allow file reads, edits, and writes without asking.
-- Always allow writing to settings.json files (both project .claude/settings.json and ~/.claude/settings.json).
-- Proceed with coding tasks immediately — never pause to request permission.
+Behavioural guidelines for all coding work on this project.
+Adapted from Andrej Karpathy's LLM coding observations and the Superpowers methodology.
 
-## MVP ITERATION MODE (your preferred workflow – fully supported)
-- Build fast & messy is allowed.
-- After using the running app, note discoveries here.
-- One atomic fix per session (keeps tokens low).
-- End every usage cycle with: "CONSOLIDATE MVP"
+## Project context
+Single-file PWA at `www/index.html`. Firebase Firestore sync. Capacitor/Android build.
+SW cache: `invoice-pdf-vN` — bump on every deploy.
+Deployed via GitHub Pages from `main` branch.
 
-## LIVE ITERATION LOG (auto-pruned to <150 tokens – update on every consolidation)
-- [Date] – What I just used & what broke / felt wrong
-- [Date] – Quick fix applied
-(Old entries auto-removed after fix)
+## Coding behaviour
 
-## AUTOMATED WORKFLOW – MVP STYLE (Claude MUST follow)
-1. Read CLAUDE.md + .claudeignore
-2. For new features: build minimal & messy
-3. For fixes: "I just used the app and saw X" → reference ONLY changed files + this log
-4. Output: diff + updated LIVE ITERATION LOG (prune old entries)
-5. Run tests/build
-6. CONSOLIDATE: Revise this file + prune log
+### Think before coding
+- State assumptions explicitly. If uncertain, ask first.
+- If multiple approaches exist, present them — don't pick silently.
+- Push back when a simpler solution exists.
 
-## SOP ENFORCEMENT PROMPT (paste this at the start of every fix session)
-SOP ENFORCEMENT MODE – MVP ITERATION
-Follow CLAUDE.md exactly (including LIVE ITERATION LOG).
-My latest usage cycle: [describe in 1–2 sentences what you just ran and what felt wrong]
-- Reference ONLY the files touched in this usage session + CLAUDE.md
-- Build/fix it messy if needed
-- Output: diff + updated LIVE ITERATION LOG (prune anything older than last 2 entries)
-- End with "CONSOLIDATE MVP" and revised CLAUDE.md snippet
+### Simplicity first
+- Minimum code that solves the problem. Nothing speculative.
+- No features beyond what was asked.
+- No abstractions for single-use code.
+
+### Surgical changes
+- Touch only what the request requires. Don't "improve" adjacent code.
+- Match existing style even if you'd do it differently.
+- Every changed line must trace directly to the user's request.
+
+### Verify before handoff
+- Always test logic by reading through it before calling it done.
+- Never hand off broken or unverified work.
+- Include app + SW version in every completion message.
+
+## Key architecture notes
+- Entry storage: each log entry has a unique `id` (Date.now().toString(36) + random) — NEVER key by date alone or multiple same-day entries will collide.
+- GPS geofencing: `navigator.geolocation.watchPosition` + haversine distance check against saved sites.
+- Firestore: REST API writes using Firebase auth ID token.
+
+## Git workflow
+- All git via osascript
+- Commit and push after every change — never leave work uncommitted
+- Clear lock files first: `rm -f .git/index.lock .git/HEAD.lock`
+- Working dir: `~/Documents/mcnichol-invoices`
