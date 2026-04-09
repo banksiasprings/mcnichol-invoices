@@ -585,6 +585,7 @@ window.firebaseSignOut = async function() {
         <button class="btn btn-secondary" onclick="editDay()">Edit</button>
         <button class="btn btn-primary" onclick="saveDay()">Save Day ✓</button>
       </div>
+      <button class="btn btn-secondary" style="width:100%;margin-top:10px" onclick="promptDiscardDay()">Cancel / Discard</button>
     </div>
   </div>
 </div>
@@ -995,6 +996,31 @@ async function forceAppUpdate() {
     </div>
     <input type="hidden" id="le-date">
     <button class="btn btn-primary" style="margin-top:8px" onclick="saveLogEdit()">Save Changes ✓</button>
+    <button class="btn btn-danger" style="margin-top:8px" onclick="promptDeleteLogEntry()">Delete Entry</button>
+  </div>
+</div>
+
+<!-- DISCARD DAY CONFIRMATION MODAL -->
+<div class="modal-bg" id="discard-confirm-modal">
+  <div class="modal" style="max-width:340px">
+    <div class="modal-title" style="border-bottom:none;padding-bottom:0">Discard this session?</div>
+    <div style="font-size:14px;color:var(--text2);margin:16px 0;line-height:1.6">Are you sure? This session won't be saved and you'll lose this time entry.</div>
+    <div class="btn-row" style="margin-top:16px;grid-template-columns:1fr 1fr">
+      <button class="btn btn-secondary" onclick="closeDiscardConfirm()">Go back</button>
+      <button class="btn btn-danger" onclick="confirmDiscardDay()">Discard</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE LOG ENTRY CONFIRMATION MODAL -->
+<div class="modal-bg" id="delete-log-confirm-modal">
+  <div class="modal" style="max-width:340px">
+    <div class="modal-title" style="border-bottom:none;padding-bottom:0">Delete this entry?</div>
+    <div style="font-size:14px;color:var(--text2);margin:16px 0;line-height:1.6">Are you sure you want to delete this entry? This cannot be undone.</div>
+    <div class="btn-row" style="margin-top:16px;grid-template-columns:1fr 1fr">
+      <button class="btn btn-secondary" onclick="closeDeleteConfirm()">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmDeleteLogEntry()">Delete</button>
+    </div>
   </div>
 </div>
 
@@ -1580,6 +1606,55 @@ window.saveLogEdit = function(){
   closeLogEditModal();
   renderLog();
   toast('Day updated ✓');
+};
+
+// --- Discard day confirmation flow ---
+window.promptDiscardDay = function(){
+  document.getElementById('discard-confirm-modal').classList.add('open');
+};
+window.closeDiscardConfirm = function(){
+  document.getElementById('discard-confirm-modal').classList.remove('open');
+};
+window.confirmDiscardDay = function(){
+  document.getElementById('discard-confirm-modal').classList.remove('open');
+  // Clear active day and return to idle state
+  DB.set('activeDay',null);
+  clearInterval(timerInterval);
+  if(outsideSiteTimer){clearTimeout(outsideSiteTimer);outsideSiteTimer=null;}
+  // Reset UI to idle checkin state
+  document.getElementById('checkin-idle').style.display='block';
+  document.getElementById('checkin-active').style.display='none';
+  document.getElementById('checkin-review').style.display='none';
+  document.getElementById('checkin-start').value=nowTime();
+  // reset son toggle
+  document.getElementById('toggle-son').checked=false;
+  document.getElementById('son-section').style.display='none';
+  document.getElementById('son-hours-input').value='';
+  document.getElementById('toggle-machine').checked=false;
+  document.getElementById('machine-section').style.display='none';
+  document.getElementById('toggle-machine2').checked=false;
+  document.getElementById('machine-section2').style.display='none';
+  toast('Session discarded');
+};
+
+// --- Delete log entry confirmation flow ---
+window.promptDeleteLogEntry = function(){
+  document.getElementById('delete-log-confirm-modal').classList.add('open');
+};
+window.closeDeleteConfirm = function(){
+  document.getElementById('delete-log-confirm-modal').classList.remove('open');
+};
+window.confirmDeleteLogEntry = function(){
+  if(!_logEditDate)return;
+  const dl=days(),idx=dl.findIndex(x=>x.date===_logEditDate);
+  if(idx===-1){toast('Day not found');return;}
+  const filtered=dl.filter((d,i)=>i!==idx);
+  DB.set('days',filtered);
+  if(window.CloudSync) window.CloudSync.pushAll().catch(()=>{});
+  document.getElementById('delete-log-confirm-modal').classList.remove('open');
+  closeLogEditModal();
+  renderLog();
+  toast('Entry deleted ✓');
 };
 
 // --- Compute day totals (shared helper) ---
