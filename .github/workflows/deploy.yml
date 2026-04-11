@@ -26,6 +26,36 @@ jobs:
           SHORT_SHA=$(git rev-parse --short HEAD)
           sed -i "s/const CACHE = 'invoice-pdf-[^']*'/const CACHE = 'invoice-pdf-${SHORT_SHA}'/" www/sw.js
           echo "Cache set to invoice-pdf-${SHORT_SHA}"
+
+      - name: Generate Capacitor live-update bundle
+        run: |
+          # Extract app version number (e.g. v14 → 1.14.0 for semver)
+          APP_VER=$(grep -o "APP_VERSION = 'v[0-9]*'" www/index.html | grep -o '[0-9]*')
+          SEMVER="1.${APP_VER}.0"
+          echo "Bundle version: ${SEMVER}"
+
+          # Create updates/ dir inside www/
+          mkdir -p www/updates
+
+          # Zip the web bundle (everything in www/ except the updates/ folder itself)
+          cd www
+          zip -r updates/bundle.zip . --exclude "updates/*"
+          cd ..
+
+          # Generate SHA-256 checksum
+          CHECKSUM=$(sha256sum www/updates/bundle.zip | awk '{print $1}')
+
+          # Write the manifest capgo checks on each app launch
+          cat > www/updates/latest.json << EOF
+          {
+            "version": "${SEMVER}",
+            "url": "https://banksiasprings.github.io/mcnichol-invoices/updates/bundle.zip",
+            "checksum": "${CHECKSUM}"
+          }
+          EOF
+
+          echo "Bundle ready: ${SEMVER} (sha256: ${CHECKSUM})"
+
       - uses: actions/upload-pages-artifact@v4
         with:
           path: 'www'

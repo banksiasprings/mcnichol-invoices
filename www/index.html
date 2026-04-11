@@ -842,6 +842,17 @@ window.firebaseSignOut = async function() {
 const APP_VERSION = 'v14';
 document.getElementById('app-version').textContent = APP_VERSION;
 
+// Capacitor live updater — notify that this bundle loaded successfully.
+// Must be called on every launch; if app crashes before this, capgo rolls back to previous version.
+(function(){
+  try{
+    if(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.CapacitorUpdater){
+      window.Capacitor.Plugins.CapacitorUpdater.notifyAppReady();
+      console.log('[Updater] notifyAppReady called — bundle confirmed good');
+    }
+  }catch(e){ console.warn('[Updater] notifyAppReady failed:',e); }
+})();
+
 async function forceAppUpdate() {
   const btn = document.getElementById('update-btn');
   btn.textContent = 'Updating…';
